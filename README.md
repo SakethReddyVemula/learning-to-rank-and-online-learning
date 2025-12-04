@@ -41,22 +41,31 @@ This project implements a personalized news ranking system using Elasticsearch a
 ## Usage
 
 ### 1. Run Baseline / Experiment Loop
-The `main.py` script handles the interaction loop. It will:
-- Index articles into Elasticsearch (if not already done).
-- Run an A/B test splitting traffic between the Baseline (Elasticsearch Default) and Personalized (XGBoost) models.
-- Log all interactions to `interaction_logs.jsonl`.
+The `main.py` script handles the interaction loop. It will run an A/B test splitting traffic between the Baseline (Elasticsearch Default) and the configured Personalized model.
+
+**Configuration**:
+To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.py`:
+-   `RANKER_TYPE = "xgboost"`: Uses the XGBoost model (default).
+-   `RANKER_TYPE = "mf"`: Uses the Matrix Factorization model.
 
 ```bash
 python3 -m src.main
 ```
 
 ### 2. Train the Model
-To retrain the personalization model using collected interaction logs:
+You can train different model variants using the `--model_type` argument:
 
+**XGBoost (Feature-based)**:
 ```bash
-python3 -m src.train
+python3 -m src.train --model_type xgboost
 ```
-This will save the trained XGBoost model to `models/ranker.model`.
+Saves to `models/ranker.model`.
+
+**Matrix Factorization (Latent Factors)**:
+```bash
+python3 -m src.train --model_type mf
+```
+Saves to `models/mf_model.pkl`.
 
 ### 3. Evaluate Results
 To calculate Click-Through Rate (CTR), Dwell Time, and perform statistical significance tests on the A/B experiment data:
@@ -66,9 +75,9 @@ python3 src/evaluate.py
 ```
 
 ### 4. Improvements
-We implemented an **Epsilon-Greedy** exploration strategy to help the model discover new user preferences. The system now supports:
+We implemented an **Epsilon-Greedy** exploration strategy and **Matrix Factorization**.
 -   **Exploration**: Randomly shuffling candidates with probability `epsilon` (default 0.1).
--   **Retraining**: The model can be retrained on data collected with exploration to improve robustness.
+-   **Latent Features**: Capturing hidden preferences via SVD.
 
 ## Methodology & Results
 For a detailed report on the approach, architecture, and experimental results, please refer to [REPORT.md](REPORT.md).

@@ -8,14 +8,19 @@ from src.logger import setup_logger, log_interaction
 
 from src.features import FeatureExtractor
 from src.ranker import PersonalizedRanker
+from src.mf_ranker import MFRanker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 DATA_FILE = "data/articles.jsonl"
-MODEL_FILE = "models/ranker.model"
-NUM_ITERATIONS = 500 # Number of queries to process
+XGBOOST_MODEL_FILE = "models/ranker.model"
+MF_MODEL_FILE = "models/mf_model.pkl"
+NUM_ITERATIONS = 50 # Number of queries to process (Short run for verification)
+
+# Configuration: "xgboost" or "mf"
+RANKER_TYPE = "mf" 
 
 def load_articles(file_path):
     """Generates articles from the JSONL file."""
@@ -73,10 +78,18 @@ def main():
     feature_extractor = FeatureExtractor()
     feature_extractor.load_article_cache(articles)
     
-    ranker = PersonalizedRanker(feature_extractor, model_path=MODEL_FILE)
+    if RANKER_TYPE == "xgboost":
+        logger.info("Initializing XGBoost Ranker...")
+        ranker = PersonalizedRanker(feature_extractor, model_path=XGBOOST_MODEL_FILE)
+    elif RANKER_TYPE == "mf":
+        logger.info("Initializing Matrix Factorization Ranker...")
+        ranker = MFRanker(model_path=MF_MODEL_FILE)
+    else:
+        logger.error(f"Unknown RANKER_TYPE: {RANKER_TYPE}")
+        return
 
     # 3. Interaction Loop
-    logger.info("Starting A/B Experiment loop...")
+    logger.info(f"Starting A/B Experiment loop with {RANKER_TYPE}...")
     for i in range(NUM_ITERATIONS):
         # Fetch Query
         query_data = sim_client.get_query()
@@ -121,11 +134,13 @@ def main():
             "query_text": query_text,
             "ranked_article_ids": final_ranking,
             "actions": actions,
-            "experiment_group": group
+            "experiment_group": group,
+            "ranker_type": RANKER_TYPE
         }
         log_interaction(interaction_logger, interaction)
         
         # Update User Profile (Always update, regardless of group, to keep history fresh)
+        # Only needed for XGBoost feature extraction, but good to keep consistent
         for j, aid in enumerate(final_ranking):
             article = feature_extractor.article_cache.get(aid)
             if not article: continue
