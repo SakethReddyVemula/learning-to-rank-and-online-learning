@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  simulation:
+    image: ire_project:1.0
+    container_name: simulation
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    depends_on:
+      - elasticsearch
+
+volumes:
+  es_data:
