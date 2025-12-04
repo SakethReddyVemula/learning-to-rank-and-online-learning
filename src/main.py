@@ -9,6 +9,7 @@ from src.logger import setup_logger, log_interaction
 from src.features import FeatureExtractor
 from src.ranker import PersonalizedRanker
 from src.mf_ranker import MFRanker
+from src.bpr_ranker import BPRRanker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,10 +18,11 @@ logger = logging.getLogger(__name__)
 DATA_FILE = "data/articles.jsonl"
 XGBOOST_MODEL_FILE = "models/ranker.model"
 MF_MODEL_FILE = "models/mf_model.pkl"
-NUM_ITERATIONS = 50 # Number of queries to process (Short run for verification)
+BPR_MODEL_FILE = "models/bpr_model.pkl"
 
-# Configuration: "xgboost" or "mf"
-RANKER_TYPE = "mf" 
+# Configuration
+NUM_ITERATIONS = int(os.getenv("NUM_ITERATIONS", 500)) 
+RANKER_TYPE = os.getenv("RANKER_TYPE", "xgboost") 
 
 def load_articles(file_path):
     """Generates articles from the JSONL file."""
@@ -84,6 +86,12 @@ def main():
     elif RANKER_TYPE == "mf":
         logger.info("Initializing Matrix Factorization Ranker...")
         ranker = MFRanker(model_path=MF_MODEL_FILE)
+    elif RANKER_TYPE == "bpr":
+        logger.info("Initializing BPR Ranker...")
+        ranker = BPRRanker(model_path=BPR_MODEL_FILE)
+    elif RANKER_TYPE == "baseline":
+        logger.info("Running in Baseline mode (No Personalized Ranker)...")
+        ranker = None
     else:
         logger.error(f"Unknown RANKER_TYPE: {RANKER_TYPE}")
         return
@@ -111,7 +119,7 @@ def main():
         # Fetch more candidates for re-ranking (e.g., 50)
         candidate_ids = es_client.search(query_text, size=50)
         
-        if group == "treatment":
+        if group == "treatment" and ranker:
             # Re-rank with exploration (epsilon=0.1)
             ranked_ids = ranker.rank(user_id, query_text, candidate_ids, epsilon=0.1)
             final_ranking = ranked_ids[:10]

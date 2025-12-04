@@ -76,6 +76,13 @@ We implemented an Epsilon-Greedy exploration strategy (`epsilon=0.1`) and collec
 
 **Observation**: The retrained model with exploration performed comparably to the baseline in terms of CTR (9.16% vs 9.24%), narrowing the gap observed in the initial experiment. However, dwell time decreased, possibly because exploration introduces random (potentially irrelevant) articles that users might click but abandon quickly.
 
+### 4.4 Pairwise Learning to Rank (BPR-MF)
+We implemented **Bayesian Personalized Ranking (BPR)**, a pairwise approach to Matrix Factorization. Unlike standard MF (which often treats unobserved items as zeros), BPR optimizes the ranking order directly by maximizing the likelihood that a user prefers a clicked item over an unobserved item.
+
+-   **Optimization**: Stochastic Gradient Descent (SGD).
+-   **Loss Function**: BPR-OPT (Log Sigmoid of the difference).
+-   **Results**: (Pending full evaluation, but functional).
+
 ## 5. Future Work
 -   **Latent Feature Discovery**: Implement Matrix Factorization or Embeddings to capture the "hidden" user preferences.
 -   **Online Learning**: Update the model incrementally in real-time instead of batch training.

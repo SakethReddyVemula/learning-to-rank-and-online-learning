@@ -6,6 +6,8 @@ import numpy as np
 import os
 import argparse
 import pickle
+import numpy as np
+import random
 from sklearn.decomposition import TruncatedSVD
 from scipy.sparse import csr_matrix
 from sklearn.model_selection import train_test_split
@@ -87,7 +89,7 @@ def train_xgboost(articles, logs):
     model = xgb.XGBClassifier(
         objective='binary:logistic',
         eval_metric='logloss',
-        n_estimators=100,
+        n_estimators=75,
         max_depth=4,
         learning_rate=0.1,
         use_label_encoder=False
@@ -173,9 +175,123 @@ def train_mf(articles, logs):
         
     logger.info(f"MF Model saved to {MF_MODEL_FILE}")
 
+BPR_MODEL_FILE = "models/bpr_model.pkl"
+
+def train_bpr(articles, logs):
+    logger.info("Training BPR-MF model...")
+    
+    # 1. Build User-Item Interactions & Mappings
+    user_map = {} 
+    item_map = {} 
+    
+    # Set of (u_idx, i_idx) for positive interactions
+    positives = set()
+    
+    u_counter = 0
+    i_counter = 0
+    
+    # Also keep track of all items for negative sampling
+    all_items = []
+    
+    for log in logs:
+        user_id = log['user_id']
+        if user_id not in user_map:
+            user_map[user_id] = u_counter
+            u_counter += 1
+        u_idx = user_map[user_id]
+        
+        ranked_ids = log['ranked_article_ids']
+        actions = log['actions']
+        
+        for i, aid in enumerate(ranked_ids):
+            if aid not in item_map:
+                item_map[aid] = i_counter
+                i_counter += 1
+                all_items.append(item_map[aid])
+            
+            i_idx = item_map[aid]
+            
+            # If clicked, add to positives
+            if i < len(actions) and "Click" in actions[i]:
+                positives.add((u_idx, i_idx))
+
+    if not positives:
+        logger.error("No clicks found for BPR training.")
+        return
+
+    n_users = u_counter
+    n_items = i_counter
+    logger.info(f"Users: {n_users}, Items: {n_items}, Interactions: {len(positives)}")
+
+    # 2. Initialize Factors
+    n_factors = 20
+    learning_rate = 0.01
+    reg = 0.01
+    epochs = 20
+    
+    user_factors = np.random.normal(0, 0.1, (n_users, n_factors))
+    item_factors = np.random.normal(0, 0.1, (n_items, n_factors))
+    
+    positives_list = list(positives)
+    
+    # 3. SGD Training
+    for epoch in range(epochs):
+        random.shuffle(positives_list)
+        loss = 0
+        
+        for u, i in positives_list:
+            # Sample negative j
+            j = random.choice(all_items)
+            while (u, j) in positives:
+                j = random.choice(all_items)
+            
+            # Predict scores
+            x_ui = np.dot(user_factors[u], item_factors[i])
+            x_uj = np.dot(user_factors[u], item_factors[j])
+            x_uij = x_ui - x_uj
+            
+            # Sigmoid
+            sigmoid = 1 / (1 + np.exp(-x_uij))
+            
+            # Update gradients
+            # d(ln sigma)/d(theta) = (1 - sigma) * d(x_uij)/d(theta)
+            coeff = 1 - sigmoid
+            
+            # User update
+            d_u = coeff * (item_factors[i] - item_factors[j]) + reg * user_factors[u]
+            user_factors[u] += learning_rate * d_u
+            
+            # Item i update
+            d_i = coeff * user_factors[u] + reg * item_factors[i]
+            item_factors[i] += learning_rate * d_i
+            
+            # Item j update
+            d_j = coeff * (-user_factors[u]) + reg * item_factors[j]
+            item_factors[j] += learning_rate * d_j
+            
+            loss += -np.log(sigmoid)
+            
+        logger.info(f"Epoch {epoch+1}/{epochs} - Loss: {loss:.4f}")
+
+    # 4. Save Model
+    model_data = {
+        'user_map': user_map,
+        'item_map': item_map,
+        'user_factors': user_factors,
+        'item_factors': item_factors
+    }
+    
+    if not os.path.exists("models"):
+        os.makedirs("models")
+        
+    with open(BPR_MODEL_FILE, 'wb') as f:
+        pickle.dump(model_data, f)
+        
+    logger.info(f"BPR Model saved to {BPR_MODEL_FILE}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_type", type=str, default="xgboost", choices=["xgboost", "mf"], help="Model type to train")
+    parser.add_argument("--model_type", type=str, default="xgboost", choices=["xgboost", "mf", "bpr"], help="Model type to train")
     args = parser.parse_args()
     
     articles, logs = load_data()
@@ -185,3 +301,5 @@ if __name__ == "__main__":
             train_xgboost(articles, logs)
         elif args.model_type == "mf":
             train_mf(articles, logs)
+        elif args.model_type == "bpr":
+            train_bpr(articles, logs)

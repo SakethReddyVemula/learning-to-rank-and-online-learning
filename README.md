@@ -47,6 +47,7 @@ The `main.py` script handles the interaction loop. It will run an A/B test split
 To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.py`:
 -   `RANKER_TYPE = "xgboost"`: Uses the XGBoost model (default).
 -   `RANKER_TYPE = "mf"`: Uses the Matrix Factorization model.
+-   `RANKER_TYPE = "bpr"`: Uses the Bayesian Personalized Ranking model.
 
 ```bash
 python3 -m src.main
@@ -66,6 +67,12 @@ Saves to `models/ranker.model`.
 python3 -m src.train --model_type mf
 ```
 Saves to `models/mf_model.pkl`.
+
+**Bayesian Personalized Ranking (Pairwise LTR)**:
+```bash
+python3 -m src.train --model_type bpr
+```
+Saves to `models/bpr_model.pkl`.
 
 ### 3. Evaluate Results
 To calculate Click-Through Rate (CTR), Dwell Time, and perform statistical significance tests on the A/B experiment data:
