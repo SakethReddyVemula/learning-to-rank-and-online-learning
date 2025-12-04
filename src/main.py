@@ -1,6 +1,7 @@
 import json
 import time
 import logging
+import tqdm
 import os
 from src.elasticsearch_client import ElasticsearchClient
 from src.simulation_client import SimulationClient
@@ -12,7 +13,7 @@ from src.mf_ranker import MFRanker
 from src.bpr_ranker import BPRRanker
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 DATA_FILE = "data/articles.jsonl"
@@ -98,7 +99,7 @@ def main():
 
     # 3. Interaction Loop
     logger.info(f"Starting A/B Experiment loop with {RANKER_TYPE}...")
-    for i in range(NUM_ITERATIONS):
+    for i in tqdm.tqdm(range(NUM_ITERATIONS), desc="Processing Queries"):
         # Fetch Query
         query_data = sim_client.get_query()
         if not query_data:
@@ -116,15 +117,23 @@ def main():
         logger.info(f"Iteration {i+1}: Query='{query_text}' (User: {user_id}, Group: {group})")
 
         # Get Candidates (Elasticsearch Default)
-        # Fetch more candidates for re-ranking (e.g., 50)
-        candidate_ids = es_client.search(query_text, size=50)
+        # Fetch more candidates for re-ranking (e.g., 100) to increase recall
+        candidate_ids = es_client.search(query_text, size=100)
         
         if group == "treatment" and ranker:
             # Re-rank with exploration (epsilon=0.1)
             ranked_ids = ranker.rank(user_id, query_text, candidate_ids, epsilon=0.1)
             final_ranking = ranked_ids[:10]
+        elif RANKER_TYPE == "baseline":
+             # Baseline Mode (Data Collection):
+             # Pure Exploration: Shuffle the top 100 candidates to find ANY relevant items.
+             # This helps break the "cold start" by gathering diverse clicks.
+             import random
+             shuffled_candidates = list(candidate_ids)
+             random.shuffle(shuffled_candidates)
+             final_ranking = shuffled_candidates[:50]
         else:
-            # Baseline: Just take top 10 from ES
+            # Control Group (during experiment): Just take top 10 from ES (BM25)
             final_ranking = candidate_ids[:10]
         
         # Send to Simulation

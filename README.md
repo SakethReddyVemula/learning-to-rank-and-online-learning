@@ -40,11 +40,21 @@ This project implements a personalized news ranking system using Elasticsearch a
 
 ## Usage
 
-### 1. Run Baseline / Experiment Loop
-The `main.py` script handles the interaction loop. It will run an A/B test splitting traffic between the Baseline (Elasticsearch Default) and the configured Personalized model.
+### 1. Automated Experiment Runner (Recommended)
+We provide a bash script to automate the entire pipeline: collecting baseline data, training all models (XGBoost, MF, BPR), and evaluating them.
+
+```bash
+./run_experiment.sh
+```
+
+### 2. Manual Execution
+
+#### Run Baseline / Experiment Loop
+The `main.py` script handles the interaction loop.
 
 **Configuration**:
 To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.py`:
+-   `RANKER_TYPE = "baseline"`: Uses Elasticsearch default ranking (for data collection).
 -   `RANKER_TYPE = "xgboost"`: Uses the XGBoost model (default).
 -   `RANKER_TYPE = "mf"`: Uses the Matrix Factorization model.
 -   `RANKER_TYPE = "bpr"`: Uses the Bayesian Personalized Ranking model.
@@ -53,7 +63,7 @@ To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.p
 python3 -m src.main
 ```
 
-### 2. Train the Model
+### 3. Train the Model
 You can train different model variants using the `--model_type` argument:
 
 **XGBoost (Feature-based)**:
@@ -74,14 +84,14 @@ python3 -m src.train --model_type bpr
 ```
 Saves to `models/bpr_model.pkl`.
 
-### 3. Evaluate Results
+### 4. Evaluate Results
 To calculate Click-Through Rate (CTR), Dwell Time, and perform statistical significance tests on the A/B experiment data:
 
 ```bash
 python3 src/evaluate.py
 ```
 
-### 4. Improvements
+### 5. Improvements
 We implemented an **Epsilon-Greedy** exploration strategy and **Matrix Factorization**.
 -   **Exploration**: Randomly shuffling candidates with probability `epsilon` (default 0.1).
 -   **Latent Features**: Capturing hidden preferences via SVD.

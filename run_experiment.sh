@@ -1,41 +1,41 @@
 #!/bin/bash
 
 # Configuration
-ITERATIONS_TRAIN=500
-ITERATIONS_EVAL=100
+ITERATIONS_TRAIN=1000
+ITERATIONS_EVAL=1000
 LOG_FILE="interaction_logs.jsonl"
 
-echo "=================================================="
-echo "      Ranking System Experiment Runner"
-echo "=================================================="
+# echo "=================================================="
+# echo "      Ranking System Experiment Runner"
+# echo "=================================================="
 
-# 1. Collect Initial Training Data (using Baseline/Control)
-# We run a short loop where everyone effectively gets baseline to populate logs
-echo "[1/5] Collecting Training Data (Baseline)..."
-# We can just run with any ranker but rely on the fact that we need logs.
-# Let's run with XGBoost but it might fall back if model missing, or we just want logs.
-# Actually, let's ensure we have some data.
-export NUM_ITERATIONS=$ITERATIONS_TRAIN
-export RANKER_TYPE="baseline" 
-# Note: If model doesn't exist, it might error or fallback. 
-# Ideally we should have a "baseline_only" mode, but "control" group gives us baseline data.
-python3 -m src.main
+# # 1. Collect Initial Training Data (using Baseline/Control)
+# # We run a short loop where everyone effectively gets baseline to populate logs
+# echo "[1/5] Collecting Training Data (Baseline)..."
+# # We can just run with any ranker but rely on the fact that we need logs.
+# # Let's run with XGBoost but it might fall back if model missing, or we just want logs.
+# # Actually, let's ensure we have some data.
+# export NUM_ITERATIONS=$ITERATIONS_TRAIN
+# export RANKER_TYPE="baseline" 
+# # Note: If model doesn't exist, it might error or fallback. 
+# # Ideally we should have a "baseline_only" mode, but "control" group gives us baseline data.
+# python3 -m src.main
 
-echo "--------------------------------------------------"
+# echo "--------------------------------------------------"
 
-# 2. Train Models
-echo "[2/5] Training Models..."
+# # 2. Train Models
+# echo "[2/5] Training Models..."
 
-echo "  > Training XGBoost..."
-python3 -m src.train --model_type xgboost
+# echo "  > Training XGBoost..."
+# python3 -m src.train --model_type xgboost
 
-echo "  > Training Matrix Factorization (MF)..."
-python3 -m src.train --model_type mf
+# echo "  > Training Matrix Factorization (MF)..."
+# python3 -m src.train --model_type mf
 
-echo "  > Training BPR-MF..."
-python3 -m src.train --model_type bpr
+# echo "  > Training BPR-MF..."
+# python3 -m src.train --model_type bpr
 
-echo "--------------------------------------------------"
+# echo "--------------------------------------------------"
 
 # Function to run evaluation
 evaluate_model() {

@@ -51,8 +51,9 @@ class ElasticsearchClient:
         try:
             body = {
                 "query": {
-                    "match": {
-                        "text": query_text
+                    "multi_match": {
+                        "query": query_text,
+                        "fields": ["text", "topics"]
                     }
                 },
                 "size": size

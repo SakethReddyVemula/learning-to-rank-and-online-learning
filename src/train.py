@@ -12,9 +12,10 @@ from sklearn.decomposition import TruncatedSVD
 from scipy.sparse import csr_matrix
 from sklearn.model_selection import train_test_split
 from src.features import FeatureExtractor
+from tqdm import tqdm
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 ARTICLES_FILE = "data/articles.jsonl"
@@ -52,7 +53,7 @@ def train_xgboost(articles, logs):
     X = []
     y = []
 
-    for log in logs:
+    for log in tqdm(logs, desc="Extracting Features"):
         user_id = log['user_id']
         query_text = log['query_text']
         ranked_ids = log['ranked_article_ids']
@@ -239,7 +240,7 @@ def train_bpr(articles, logs):
         random.shuffle(positives_list)
         loss = 0
         
-        for u, i in positives_list:
+        for u, i in tqdm(positives_list, desc=f"Epoch {epoch+1}/{epochs}", leave=False):
             # Sample negative j
             j = random.choice(all_items)
             while (u, j) in positives:
