@@ -11,15 +11,17 @@ from src.features import FeatureExtractor
 from src.ranker import PersonalizedRanker
 from src.mf_ranker import MFRanker
 from src.bpr_ranker import BPRRanker
+from src.linucb_ranker import LinUCBRanker
 
 # Configure logging
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 DATA_FILE = "data/articles.jsonl"
 XGBOOST_MODEL_FILE = "models/ranker.model"
 MF_MODEL_FILE = "models/mf_model.pkl"
 BPR_MODEL_FILE = "models/bpr_model.pkl"
+LINUCB_MODEL_FILE = "models/linucb_model.pkl"
 
 # Configuration
 NUM_ITERATIONS = int(os.getenv("NUM_ITERATIONS", 500)) 
@@ -81,6 +83,7 @@ def main():
     feature_extractor = FeatureExtractor()
     feature_extractor.load_article_cache(articles)
     
+    ranker = None
     if RANKER_TYPE == "xgboost":
         logger.info("Initializing XGBoost Ranker...")
         ranker = PersonalizedRanker(feature_extractor, model_path=XGBOOST_MODEL_FILE)
@@ -90,6 +93,10 @@ def main():
     elif RANKER_TYPE == "bpr":
         logger.info("Initializing BPR Ranker...")
         ranker = BPRRanker(model_path=BPR_MODEL_FILE)
+    elif RANKER_TYPE == "linucb":
+        logger.info("Initializing LinUCB Ranker (Online Learning)...")
+        ranker = LinUCBRanker(model_path=LINUCB_MODEL_FILE, alpha=0.5)
+        ranker.load_article_cache(articles) # LinUCB needs direct article access
     elif RANKER_TYPE == "baseline":
         logger.info("Running in Baseline mode (No Personalized Ranker)...")
         ranker = None
@@ -114,7 +121,7 @@ def main():
         # Assign Group
         group = experiment_manager.get_group(user_id)
         
-        logger.info(f"Iteration {i+1}: Query='{query_text}' (User: {user_id}, Group: {group})")
+        # logger.info(f"Iteration {i+1}: Query='{query_text}' (User: {user_id}, Group: {group})")
 
         # Get Candidates (Elasticsearch Default)
         # Fetch more candidates for re-ranking (e.g., 100) to increase recall
@@ -122,6 +129,8 @@ def main():
         
         if group == "treatment" and ranker:
             # Re-rank with exploration (epsilon=0.1)
+            # Note: LinUCB handles exploration internally via UCB, so epsilon might be redundant or additive.
+            # We'll pass it anyway, ranker can ignore it.
             ranked_ids = ranker.rank(user_id, query_text, candidate_ids, epsilon=0.1)
             final_ranking = ranked_ids[:10]
         elif RANKER_TYPE == "baseline":
@@ -131,7 +140,7 @@ def main():
              import random
              shuffled_candidates = list(candidate_ids)
              random.shuffle(shuffled_candidates)
-             final_ranking = shuffled_candidates[:50]
+             final_ranking = shuffled_candidates[:10]
         else:
             # Control Group (during experiment): Just take top 10 from ES (BM25)
             final_ranking = candidate_ids[:10]
@@ -163,11 +172,28 @@ def main():
             if not article: continue
             
             article_actions = actions[j]
-            if "Click" in article_actions:
+            is_click = "Click" in article_actions
+            
+            if is_click:
                 feature_extractor.update_user_profile(user_id, article, "Click")
+                
+            # ONLINE LEARNING UPDATE (LinUCB)
+            if RANKER_TYPE == "linucb" and group == "treatment":
+                # Reward: 1 for Click, 0 for No Click
+                reward = 1.0 if is_click else 0.0
+                # Only update for the displayed items
+                ranker.update(user_id, aid, reward)
+        
+        # Save LinUCB model periodically (every 100 iterations)
+        if RANKER_TYPE == "linucb" and (i + 1) % 100 == 0:
+            ranker.save_model()
         
         # Optional: Sleep
-        time.sleep(0.1)
+        # time.sleep(0.1)
+
+    # Final save
+    if RANKER_TYPE == "linucb" and ranker:
+        ranker.save_model()
 
     logger.info("Experiment data collection complete.")
 

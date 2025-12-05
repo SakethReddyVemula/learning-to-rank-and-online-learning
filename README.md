@@ -58,6 +58,7 @@ To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.p
 -   `RANKER_TYPE = "xgboost"`: Uses the XGBoost model (default).
 -   `RANKER_TYPE = "mf"`: Uses the Matrix Factorization model.
 -   `RANKER_TYPE = "bpr"`: Uses the Bayesian Personalized Ranking model.
+-   `RANKER_TYPE = "linucb"`: Uses the LinUCB (Contextual Bandit) model.
 
 ```bash
 python3 -m src.main

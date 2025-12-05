@@ -83,6 +83,13 @@ We implemented **Bayesian Personalized Ranking (BPR)**, a pairwise approach to M
 -   **Loss Function**: BPR-OPT (Log Sigmoid of the difference).
 -   **Results**: (Pending full evaluation, but functional).
 
+### 4.5 Online Learning (Contextual Bandits - LinUCB)
+To address data sparsity and changing user preferences, we implemented **LinUCB**, a contextual bandit algorithm.
+-   **Context**: Article topics (One-hot encoded).
+-   **Algorithm**: Disjoint LinUCB (separate model per user).
+-   **Online Update**: The model updates its parameters ($A$ and $b$) immediately after every user interaction (Click/No Click), allowing it to adapt in real-time.
+-   **Exploration**: Uses Upper Confidence Bound (UCB) to balance exploration and exploitation.
+
 ## 5. Future Work
 -   **Latent Feature Discovery**: Implement Matrix Factorization or Embeddings to capture the "hidden" user preferences.
 -   **Online Learning**: Update the model incrementally in real-time instead of batch training.

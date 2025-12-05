@@ -90,10 +90,16 @@ def train_xgboost(articles, logs):
     model = xgb.XGBClassifier(
         objective='binary:logistic',
         eval_metric='logloss',
-        n_estimators=75,
-        max_depth=4,
-        learning_rate=0.1,
-        use_label_encoder=False
+        n_estimators=900,
+        max_depth=8,
+        learning_rate=0.03,
+        subsample=0.7,
+        colsample_bytree=0.7,
+        man_child_weight=3,
+        reg_alpha=0.5,
+        reg_lambda=1.2,
+        gamma=1.0,
+        tree_method="hist",
     )
 
     model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=True)
