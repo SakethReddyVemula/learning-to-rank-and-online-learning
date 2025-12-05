@@ -70,9 +70,11 @@ Here, $\langle v_i, v_j \rangle$ is the dot product of two $k$-dimensional laten
 
 # Evaluation Results
 
-To validate the performance of our ranking algorithms, we conducted online A/B testing against the User Simulation. We tracked the **Click-Through Rate (CTR)** over 500 interaction rounds for each method. The plots below illustrate the cumulative CTR of the treatment group (Ranker) versus the control group (Baseline BM25).
+To validate the performance of our ranking algorithms, we conducted online A/B testing against the User Simulation. We tracked the cumulative **Click-Through Rate (CTR)** and **Average Dwell Time** over 1000 interaction rounds.
 
-### 1. XGBoost (Pointwise)
+The plots below illustrate the performance of each experimental ranker (Treatment) compared to the BM25 Baseline (Control).
+
+### 1. XGBoost (Pointwise Ranker)
 ![XGBoost Performance](plots/xgboost.png)
 
 ### 2. Matrix Factorization (Latent Factors)
@@ -87,17 +89,28 @@ To validate the performance of our ranking algorithms, we conducted online A/B t
 ### 5. Hybrid Ranker
 ![Hybrid Performance](plots/fm.png)
 
+---
+
 ## Analysis & Discussion
 
-Across the experiments, a clear trend emerged regarding the efficacy of different learning strategies in this simulation environment.
+The experimental results highlight a significant divergence between engagement metrics (CTR) and post-click satisfaction metrics (Dwell Time), driven largely by the environmental constraints of the simulation.
 
-**Key Finding:**
-**Only the Hybrid method was able to consistently outperform the Baseline (BM25).**
+### 1. Click-Through Rate (CTR)
+**Observation:** **Only the Hybrid method consistently outperformed the Baseline (BM25) in terms of CTR.**
+Most individual models (MF, BPR, LinUCB) struggled to exceed the baseline's click rate. The Hybrid approach likely succeeded by ensembling robust content features with collaborative signals, smoothing out the noise that plagued individual models.
 
-Most advanced methods (MF, BPR, and even LinUCB) struggled to beat the simple probabilistic retrieval of BM25. This performance gap can be attributed to two primary factors specific to our simulation environment:
+### 2. Average Dwell Time
+**Observation:** **XGBoost, LinUCB, and Factorization Machines (FM) outperformed the Baseline.**
+While these feature-based models did not always win the click (CTR), they excelled at keeping users engaged *once* a click occurred. This suggests they were far more effective at retrieving content that was semantically relevant to the user's hidden interests, even if the user's clicking behavior was noisy.
 
-1.  **Data Sparsity (Cold Start):**
-    The simulation starts with zero user history. Collaborative filtering methods like Matrix Factorization and BPR rely heavily on a dense matrix of user-item interactions to find latent patterns. With only 500 iterations and a large item space, the interaction matrix remained extremely sparse, preventing these models from learning effective latent vectors.
+### Reasoning: Sparsity and Stochasticity
 
-2.  **Stochastic User Interactions:**
-    The user simulation exhibited a high degree of randomness ("noise") in its click behavior. Purely interaction-based models struggled to distinguish between genuine preference signals and random noise. The Hybrid method, by likely combining content-based features (which work immediately) with interaction signals, was the only architecture robust enough to handle this noise and provide better-than-random recommendations in the early stages of the experiment.
+Two primary factors explain why sophisticated models like MF and BPR failed to beat the baseline, and why feature-based models excelled at Dwell Time:
+
+* **Data Sparsity (The Cold Start Problem):**
+    The simulation operated with a "cold start" constraint ($N=500$ iterations). Collaborative Filtering methods (Matrix Factorization, BPR) require a dense user-item interaction matrix to learn effective latent vectors. With no prior history, these models were essentially guessing, unable to build a reliable profile before the experiment ended.
+
+* **Stochastic User Interactions (Noise):**
+    The user simulation exhibited a high degree of randomness in its click behavior.
+    * **Impact on CTR:** Pure interaction models (MF/BPR) overfitted to this random noise, learning "preferences" that didn't exist, leading to poor future recommendations.
+    * **Impact on Dwell Time:** Feature-based models (XGBoost, LinUCB, FM) rely on **article content** (categories, text features) rather than just ID-based interactions. Even with random clicking, these models could map query context to article content effectively. Thus, when a user *did* click a recommended item, it was genuinely relevant, resulting in higher Dwell Time compared to the keyword-based Baseline.
