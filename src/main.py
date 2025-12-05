@@ -12,6 +12,7 @@ from src.ranker import PersonalizedRanker
 from src.mf_ranker import MFRanker
 from src.bpr_ranker import BPRRanker
 from src.linucb_ranker import LinUCBRanker
+from src.fm_ranker import FMRanker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,6 +23,7 @@ XGBOOST_MODEL_FILE = "models/ranker.model"
 MF_MODEL_FILE = "models/mf_model.pkl"
 BPR_MODEL_FILE = "models/bpr_model.pkl"
 LINUCB_MODEL_FILE = "models/linucb_model.pkl"
+FM_MODEL_FILE = "models/fm_model.pkl"
 
 # Configuration
 NUM_ITERATIONS = int(os.getenv("NUM_ITERATIONS", 500)) 
@@ -96,7 +98,11 @@ def main():
     elif RANKER_TYPE == "linucb":
         logger.info("Initializing LinUCB Ranker (Online Learning)...")
         ranker = LinUCBRanker(model_path=LINUCB_MODEL_FILE, alpha=0.5)
-        ranker.load_article_cache(articles) # LinUCB needs direct article access
+        ranker.load_article_cache(articles)
+    elif RANKER_TYPE == "fm":
+        logger.info("Initializing Factorization Machine Ranker...")
+        ranker = FMRanker(model_path=FM_MODEL_FILE)
+        ranker.load_article_cache(articles)
     elif RANKER_TYPE == "baseline":
         logger.info("Running in Baseline mode (No Personalized Ranker)...")
         ranker = None
@@ -139,7 +145,7 @@ def main():
              # This helps break the "cold start" by gathering diverse clicks.
              import random
              shuffled_candidates = list(candidate_ids)
-             random.shuffle(shuffled_candidates)
+            #  random.shuffle(shuffled_candidates)
              final_ranking = shuffled_candidates[:10]
         else:
             # Control Group (during experiment): Just take top 10 from ES (BM25)

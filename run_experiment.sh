@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-ITERATIONS_TRAIN=10000
+ITERATIONS_TRAIN=1000
 ITERATIONS_EVAL=1000
 LOG_FILE="interaction_logs.jsonl"
 
@@ -76,7 +76,11 @@ echo "[5/6] Evaluation: BPR-MF"
 evaluate_model "bpr"
 
 # 6. Evaluate LinUCB
-echo "[6/6] Evaluation: LinUCB (Contextual Bandits)"
+echo "[6/7] Evaluation: LinUCB (Contextual Bandits)"
 evaluate_model "linucb"
+
+# 7. Evaluate FM
+echo "[7/7] Evaluation: Factorization Machines (Hybrid)"
+evaluate_model "fm"
 
 echo "Done! Master logs saved to ${LOG_FILE}.master"

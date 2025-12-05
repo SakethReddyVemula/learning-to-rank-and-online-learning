@@ -296,9 +296,158 @@ def train_bpr(articles, logs):
         
     logger.info(f"BPR Model saved to {BPR_MODEL_FILE}")
 
+from lightfm import LightFM
+
+FM_MODEL_FILE = "models/fm_model.pkl"
+
+def train_fm(articles, logs):
+    logger.info("Training Factorization Machines (LightFM)...")
+    
+    # 1. Mappings
+    user_map = {}
+    item_map = {}
+    topic_map = {}
+    
+    # Get all topics first
+    all_topics = set()
+    for art in articles:
+        for t in art.get("topics", []):
+            all_topics.add(t)
+    
+    topic_list = sorted(list(all_topics))
+    for i, t in enumerate(topic_list):
+        topic_map[t] = i
+        
+    n_topics = len(topic_list)
+    
+    # 2. Build Interactions
+    # We need to map all users and items involved in interactions
+    # AND all items in articles (to build feature matrix for all)
+    
+    # Map all items from articles first (to ensure feature matrix covers them)
+    for art in articles:
+        aid = art.get("id", art.get("uuid"))
+        if aid not in item_map:
+            item_map[aid] = len(item_map)
+            
+    # Map users from logs
+    interactions_list = [] # (u_idx, i_idx)
+    
+    for log in tqdm(logs, desc="Processing Logs for FM"):
+        user_id = log['user_id']
+        if user_id not in user_map:
+            user_map[user_id] = len(user_map)
+        u_idx = user_map[user_id]
+        
+        ranked_ids = log['ranked_article_ids']
+        actions = log['actions']
+        
+        for i, aid in enumerate(ranked_ids):
+            if aid in item_map:
+                i_idx = item_map[aid]
+                if i < len(actions) and "Click" in actions[i]:
+                    interactions_list.append((u_idx, i_idx))
+    
+    n_users = len(user_map)
+    n_items = len(item_map)
+    
+    # Create Interaction Matrix
+    # LightFM expects (n_users, n_items)
+    data = np.ones(len(interactions_list))
+    rows = [x[0] for x in interactions_list]
+    cols = [x[1] for x in interactions_list]
+    interaction_matrix = csr_matrix((data, (rows, cols)), shape=(n_users, n_items))
+    
+    logger.info(f"Interaction Matrix: {n_users} Users x {n_items} Items, {len(interactions_list)} interactions.")
+    
+    # 3. Build Item Features
+    # Shape: (n_items, n_features)
+    # Features = Identity (n_items) + Topics (n_topics)
+    # LightFM by default adds identity if no features passed.
+    # If we pass features, we usually want to include identity explicitly or rely on content only.
+    # Hybrid = Identity + Content.
+    
+    # Let's define features as just Topics for now? 
+    # No, Hybrid is best. So we want a matrix of shape (n_items, n_items + n_topics).
+    # But that's huge. LightFM allows supplying a feature matrix where rows=items.
+    # If we want identity, we can use `build_item_features` from lightfm.data or just construct sparse matrix.
+    # Let's construct: (n_items, n_topics) and let LightFM add identity?
+    # Actually, LightFM `fit` has `item_features`. If supplied, it uses it.
+    # If we want hybrid, we usually construct a matrix where we have identity features AND topic features.
+    # But for simplicity and memory, let's try using JUST topic features first?
+    # No, that's pure content-based. We want Hybrid.
+    # LightFM documentation says: "If you want to use both [id and metadata], you should append an identity matrix to your feature matrix."
+    # But creating a (n_items, n_items) identity matrix is memory heavy if dense, but fine if sparse.
+    
+    # Let's try constructing a sparse matrix of shape (n_items, n_topics).
+    # And we will NOT add identity manually, but we will see if LightFM performs well.
+    # Wait, if we don't add identity, it can't learn per-item biases/factors effectively if features are shared.
+    # So we SHOULD add identity.
+    # Feature dimension = n_topics.
+    # But we want per-item latent factors too.
+    # Let's use `identity` features implicitly? No, LightFM doesn't do that if features are passed.
+    
+    # Okay, let's build (n_items, n_topics) matrix.
+    # And we will rely on the fact that if topics are unique enough it helps.
+    # BUT to be truly hybrid, we need identity.
+    # Let's construct a LIL matrix of shape (n_items, n_items + n_topics).
+    # This might be too big for 12k items? 12k x 12k is 144M entries (sparse though).
+    # 12k rows. Each row has 1 (identity) + ~2 (topics) = 3 entries.
+    # Total entries = 36k. Very sparse. Totally fine.
+    
+    n_features = n_items + n_topics
+    feat_rows = []
+    feat_cols = []
+    feat_data = []
+    
+    for aid, i_idx in item_map.items():
+        # Identity feature
+        feat_rows.append(i_idx)
+        feat_cols.append(i_idx)
+        feat_data.append(1.0)
+        
+        # Topic features
+        # We need to find the article object.
+        # We iterated articles before.
+        # Let's do a lookup or iterate again.
+        pass # Optimization: do this in the first loop?
+        
+    # Re-iterate articles to fill features
+    for art in articles:
+        aid = art.get("id", art.get("uuid"))
+        if aid in item_map:
+            i_idx = item_map[aid]
+            for t in art.get("topics", []):
+                if t in topic_map:
+                    t_idx = topic_map[t]
+                    # Feature index = n_items + t_idx
+                    feat_rows.append(i_idx)
+                    feat_cols.append(n_items + t_idx)
+                    feat_data.append(1.0)
+                    
+    item_features = csr_matrix((feat_data, (feat_rows, feat_cols)), shape=(n_items, n_features))
+    
+    # 4. Train
+    model = LightFM(loss='warp', no_components=20, learning_rate=0.05)
+    model.fit(interaction_matrix, item_features=item_features, epochs=30, num_threads=2)
+    
+    # 5. Save
+    model_data = {
+        'model': model,
+        'user_map': user_map,
+        'item_map': item_map,
+        'topic_map': topic_map,
+        'item_features': item_features # Save this for ranking!
+    }
+    
+    with open(FM_MODEL_FILE, 'wb') as f:
+        pickle.dump(model_data, f)
+        
+    logger.info(f"FM Model saved to {FM_MODEL_FILE}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_type", type=str, default="xgboost", choices=["xgboost", "mf", "bpr"], help="Model type to train")
+    parser.add_argument("--model_type", type=str, default="xgboost", choices=["xgboost", "mf", "bpr", "fm"], help="Model type to train")
     args = parser.parse_args()
     
     articles, logs = load_data()
@@ -310,3 +459,5 @@ if __name__ == "__main__":
             train_mf(articles, logs)
         elif args.model_type == "bpr":
             train_bpr(articles, logs)
+        elif args.model_type == "fm":
+            train_fm(articles, logs)

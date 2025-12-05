@@ -90,6 +90,12 @@ To address data sparsity and changing user preferences, we implemented **LinUCB*
 -   **Online Update**: The model updates its parameters ($A$ and $b$) immediately after every user interaction (Click/No Click), allowing it to adapt in real-time.
 -   **Exploration**: Uses Upper Confidence Bound (UCB) to balance exploration and exploitation.
 
+### 4.6 Hybrid Approach (Factorization Machines)
+To further address sparsity and leverage both user behavior and content, we implemented **Factorization Machines (FM)** using the `lightfm` library.
+-   **Hybrid Features**: Combines User IDs, Item IDs, and Article Topics.
+-   **Loss Function**: WARP (Weighted Approximate-Rank Pairwise), which optimizes for ranking by maximizing the margin between positive and negative examples.
+-   **Advantage**: Generalizes better than pure MF by learning interactions between features (e.g., User A likes Topic T), even for new items with known topics.
+
 ## 5. Future Work
 -   **Latent Feature Discovery**: Implement Matrix Factorization or Embeddings to capture the "hidden" user preferences.
 -   **Online Learning**: Update the model incrementally in real-time instead of batch training.
