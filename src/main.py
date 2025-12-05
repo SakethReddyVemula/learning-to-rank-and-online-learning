@@ -6,6 +6,7 @@ import os
 from src.elasticsearch_client import ElasticsearchClient
 from src.simulation_client import SimulationClient
 from src.logger import setup_logger, log_interaction
+from dotenv import load_dotenv
 
 from src.features import FeatureExtractor
 from src.ranker import PersonalizedRanker
@@ -14,6 +15,7 @@ from src.bpr_ranker import BPRRanker
 from src.linucb_ranker import LinUCBRanker
 from src.fm_ranker import FMRanker
 
+load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
