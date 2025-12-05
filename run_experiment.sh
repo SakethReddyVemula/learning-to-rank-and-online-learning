@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ITERATIONS_TRAIN=1000
-ITERATIONS_EVAL=1000
+ITERATIONS_EVAL=200
 LOG_FILE="interaction_logs.jsonl"
 
 echo "=================================================="
@@ -49,18 +49,46 @@ evaluate_model() {
     echo "--------------------------------------------------"
 }
 
-echo "[3/5] Evaluation: XGBoost"
+# Set global evaluation iterations and extended actions flag
+export NUM_ITERATIONS=$ITERATIONS_EVAL # Re-using ITERATIONS_EVAL for all evaluation runs
+export USE_EXTENDED_ACTIONS=true
+
+# 1. Baseline Data Collection (Randomized)
+echo "[1/7] Baseline Data Collection (Randomized)"
+export RANKER_TYPE="baseline"
+export NUM_ITERATIONS=$ITERATIONS_TRAIN # Use training iterations for baseline collection
+python3 -m src.main
+echo "--------------------------------------------------"
+
+# 2. Train & Evaluate XGBoost
+echo "[2/7] Training XGBoost..."
+python3 -m src.train --model_type xgboost --use_extended_actions
+echo "Evaluation: XGBoost"
 evaluate_model "xgboost"
 
-echo "[4/5] Evaluation: Matrix Factorization"
+# 3. Train & Evaluate MF
+echo "[3/7] Training Matrix Factorization..."
+python3 -m src.train --model_type mf --use_extended_actions
+echo "Evaluation: Matrix Factorization"
 evaluate_model "mf"
 
-echo "[5/6] Evaluation: BPR-MF"
+# 4. Train & Evaluate BPR
+echo "[4/7] Training BPR-MF..."
+python3 -m src.train --model_type bpr --use_extended_actions
+echo "Evaluation: BPR-MF"
 evaluate_model "bpr"
 
+# 5. Train & Evaluate FM
+echo "[5/7] Training Factorization Machines..."
+python3 -m src.train --model_type fm --use_extended_actions
+echo "Evaluation: Factorization Machines"
+evaluate_model "fm"
+
+# 6. Evaluate LinUCB
 echo "[6/7] Evaluation: LinUCB (Contextual Bandits)"
 evaluate_model "linucb"
 
+# 7. Evaluate Factorization Machines (Hybrid) - This seems to be a duplicate evaluation of FM, keeping as per instruction
 echo "[7/7] Evaluation: Factorization Machines (Hybrid)"
 evaluate_model "fm"
 

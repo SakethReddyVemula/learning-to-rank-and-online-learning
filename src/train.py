@@ -41,14 +41,31 @@ def load_data():
     logger.info(f"Loaded {len(articles)} articles and {len(logs)} interaction logs.")
     return articles, logs
 
-def train_xgboost(articles, logs):
-    logger.info("Training XGBoost model...")
+def calculate_relevance(actions, use_extended=False):
+    """Calculates relevance score based on actions."""
+    if not use_extended:
+        return 1.0 if "Click" in actions else 0.0
+    
+    score = 0.0
+    if "Click" in actions:
+        score += 1.0
+    if "Like" in actions:
+        score += 2.0
+    if "Share" in actions:
+        score += 3.0
+    if "Bookmark" in actions:
+        score += 3.0
+    return score
+
+def train_xgboost(articles, logs, use_extended=False):
+    logger.info(f"Training XGBoost model (Extended Actions: {use_extended})...")
     feature_extractor = FeatureExtractor()
     feature_extractor.load_article_cache(articles)
 
     logger.info("Processing logs and extracting features...")
     X = []
     y = []
+    weights = []
 
     for log in tqdm(logs, desc="Extracting Features"):
         user_id = log['user_id']
@@ -60,24 +77,32 @@ def train_xgboost(articles, logs):
             article = feature_extractor.article_cache.get(aid)
             if not article: continue
             
-            label = 0
-            if i < len(actions) and "Click" in actions[i]:
-                label = 1
+            # Determine label and weight
+            if i < len(actions):
+                act = actions[i]
+                relevance = calculate_relevance(act, use_extended)
+            else:
+                relevance = 0.0
+            
+            label = 1 if relevance > 0 else 0
+            weight = relevance if relevance > 0 else 1.0 # Default weight 1 for negatives
             
             feats = feature_extractor.get_features(user_id, article, query_text)
             X.append(feats)
             y.append(label)
+            weights.append(weight)
             
             if label == 1:
                 feature_extractor.update_user_profile(user_id, article, "Click")
 
     df = pd.DataFrame(X)
     y = np.array(y)
+    weights = np.array(weights)
     
     logger.info(f"Training data shape: {df.shape}")
     logger.info(f"Positive samples: {sum(y)}")
 
-    X_train, X_val, y_train, y_val = train_test_split(df, y, test_size=0.2, random_state=42)
+    X_train, X_val, y_train, y_val, w_train, w_val = train_test_split(df, y, weights, test_size=0.2, random_state=42)
 
     model = xgb.XGBClassifier(
         objective='binary:logistic',
@@ -87,14 +112,14 @@ def train_xgboost(articles, logs):
         learning_rate=0.03,
         subsample=0.7,
         colsample_bytree=0.7,
-        man_child_weight=3,
+        min_child_weight=3,
         reg_alpha=0.5,
         reg_lambda=1.2,
         gamma=1.0,
         tree_method="hist",
     )
 
-    model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=True)
+    model.fit(X_train, y_train, sample_weight=w_train, eval_set=[(X_val, y_val)], sample_weight_eval_set=[w_val], verbose=True)
 
     if not os.path.exists("models"):
         os.makedirs("models")
@@ -102,8 +127,8 @@ def train_xgboost(articles, logs):
     model.save_model(XGBOOST_MODEL_FILE)
     logger.info(f"XGBoost model saved to {XGBOOST_MODEL_FILE}")
 
-def train_mf(articles, logs):
-    logger.info("Training Matrix Factorization model...")
+def train_mf(articles, logs, use_extended=False):
+    logger.info(f"Training Matrix Factorization model (Extended Actions: {use_extended})...")
     
     user_map = {}
     item_map = {}
@@ -133,13 +158,15 @@ def train_mf(articles, logs):
             
             i_idx = item_map[aid]
             
-            if i < len(actions) and "Click" in actions[i]:
-                rows.append(u_idx)
-                cols.append(i_idx)
-                data.append(1.0)
+            if i < len(actions):
+                relevance = calculate_relevance(actions[i], use_extended)
+                if relevance > 0:
+                    rows.append(u_idx)
+                    cols.append(i_idx)
+                    data.append(relevance) # Use relevance score as rating
     
     if not data:
-        logger.error("No clicks found for MF training.")
+        logger.error("No interactions found for MF training.")
         return
 
     interaction_matrix = csr_matrix((data, (rows, cols)), shape=(u_counter, i_counter))
@@ -170,8 +197,8 @@ def train_mf(articles, logs):
 
 BPR_MODEL_FILE = "models/bpr_model.pkl"
 
-def train_bpr(articles, logs):
-    logger.info("Training BPR-MF model...")
+def train_bpr(articles, logs, use_extended=False):
+    logger.info(f"Training BPR-MF model (Extended Actions: {use_extended})...")
     
     user_map = {} 
     item_map = {} 
@@ -201,11 +228,13 @@ def train_bpr(articles, logs):
             
             i_idx = item_map[aid]
             
-            if i < len(actions) and "Click" in actions[i]:
-                positives.add((u_idx, i_idx))
+            if i < len(actions):
+                relevance = calculate_relevance(actions[i], use_extended)
+                if relevance > 0:
+                    positives.add((u_idx, i_idx))
 
     if not positives:
-        logger.error("No clicks found for BPR training.")
+        logger.error("No interactions found for BPR training.")
         return
 
     n_users = u_counter
@@ -271,8 +300,8 @@ from lightfm import LightFM
 
 FM_MODEL_FILE = "models/fm_model.pkl"
 
-def train_fm(articles, logs):
-    logger.info("Training Factorization Machines (LightFM)...")
+def train_fm(articles, logs, use_extended=False):
+    logger.info(f"Training Factorization Machines (LightFM) (Extended Actions: {use_extended})...")
     
     user_map = {}
     item_map = {}
@@ -294,7 +323,7 @@ def train_fm(articles, logs):
         if aid not in item_map:
             item_map[aid] = len(item_map)
             
-    interactions_list = []
+    interactions_list = [] # (u_idx, i_idx, weight)
     
     for log in tqdm(logs, desc="Processing Logs for FM"):
         user_id = log['user_id']
@@ -308,13 +337,15 @@ def train_fm(articles, logs):
         for i, aid in enumerate(ranked_ids):
             if aid in item_map:
                 i_idx = item_map[aid]
-                if i < len(actions) and "Click" in actions[i]:
-                    interactions_list.append((u_idx, i_idx))
+                if i < len(actions):
+                    relevance = calculate_relevance(actions[i], use_extended)
+                    if relevance > 0:
+                        interactions_list.append((u_idx, i_idx, relevance))
     
     n_users = len(user_map)
     n_items = len(item_map)
     
-    data = np.ones(len(interactions_list))
+    data = [x[2] for x in interactions_list]
     rows = [x[0] for x in interactions_list]
     cols = [x[1] for x in interactions_list]
     interaction_matrix = csr_matrix((data, (rows, cols)), shape=(n_users, n_items))
@@ -348,7 +379,7 @@ def train_fm(articles, logs):
     item_features = csr_matrix((feat_data, (feat_rows, feat_cols)), shape=(n_items, n_features))
     
     model = LightFM(loss='warp', no_components=20, learning_rate=0.05)
-    model.fit(interaction_matrix, item_features=item_features, epochs=30, num_threads=2)
+    model.fit(interaction_matrix, item_features=item_features, epochs=30, num_threads=2, sample_weight=interaction_matrix.tocoo())
     
     model_data = {
         'model': model,
@@ -358,6 +389,9 @@ def train_fm(articles, logs):
         'item_features': item_features
     }
     
+    if not os.path.exists("models"):
+        os.makedirs("models")
+        
     with open(FM_MODEL_FILE, 'wb') as f:
         pickle.dump(model_data, f)
         
@@ -366,16 +400,17 @@ def train_fm(articles, logs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str, default="xgboost", choices=["xgboost", "mf", "bpr", "fm"], help="Model type to train")
+    parser.add_argument("--use_extended_actions", action="store_true", help="Use extended actions (Like, Share, Bookmark) for training")
     args = parser.parse_args()
     
     articles, logs = load_data()
     
     if articles and logs:
         if args.model_type == "xgboost":
-            train_xgboost(articles, logs)
+            train_xgboost(articles, logs, args.use_extended_actions)
         elif args.model_type == "mf":
-            train_mf(articles, logs)
+            train_mf(articles, logs, args.use_extended_actions)
         elif args.model_type == "bpr":
-            train_bpr(articles, logs)
+            train_bpr(articles, logs, args.use_extended_actions)
         elif args.model_type == "fm":
-            train_fm(articles, logs)
+            train_fm(articles, logs, args.use_extended_actions)

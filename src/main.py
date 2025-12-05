@@ -29,6 +29,7 @@ FM_MODEL_FILE = "models/fm_model.pkl"
 
 NUM_ITERATIONS = int(os.getenv("NUM_ITERATIONS", 500)) 
 RANKER_TYPE = os.getenv("RANKER_TYPE", "xgboost") 
+USE_EXTENDED_ACTIONS = os.getenv("USE_EXTENDED_ACTIONS", "false").lower() == "true"
 
 def load_articles(file_path):
     """Generates articles from the JSONL file."""
@@ -59,6 +60,11 @@ def main():
     sim_client = SimulationClient()
     interaction_logger = setup_logger()
     experiment_manager = ExperimentManager()
+
+    if USE_EXTENDED_ACTIONS:
+        logger.info("Extended Actions (Like, Share, Bookmark) ENABLED.")
+    else:
+        logger.info("Extended Actions DISABLED (Click only).")
 
     logger.info("Checking Elasticsearch index...")
     es_client.create_index()
@@ -132,6 +138,7 @@ def main():
             shuffled_candidates = list(candidate_ids)
             final_ranking = shuffled_candidates[:10]
         else:
+            # control: top 10 candidates from elasticsearch default ranker (BM25)
             final_ranking = candidate_ids[:10]
         
         response = sim_client.post_ranklist(user_id, query_id, final_ranking)
@@ -162,8 +169,21 @@ def main():
             if is_click:
                 feature_extractor.update_user_profile(user_id, article, "Click")
                 
+            # ONLINE LEARNING UPDATE (LinUCB)
             if RANKER_TYPE == "linucb" and group == "treatment":
-                reward = 1.0 if is_click else 0.0
+                # Reward calculation
+                reward = 0.0
+                if is_click:
+                    reward += 1.0
+                
+                if USE_EXTENDED_ACTIONS:
+                    if "Like" in article_actions:
+                        reward += 2.0
+                    if "Share" in article_actions:
+                        reward += 3.0
+                    if "Bookmark" in article_actions:
+                        reward += 3.0
+                
                 ranker.update(user_id, aid, reward)
         
         if RANKER_TYPE == "linucb" and (i + 1) % 100 == 0:

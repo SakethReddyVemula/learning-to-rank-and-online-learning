@@ -61,7 +61,13 @@ To switch between ranking models, edit the `RANKER_TYPE` variable in `src/main.p
 -   `RANKER_TYPE = "linucb"`: Uses the LinUCB (Contextual Bandit) model.
 -   `RANKER_TYPE = "fm"`: Uses the Factorization Machine (Hybrid) model.
 
+### Extended User Actions
+You can enable the use of "Like", "Share", and "Bookmark" actions to boost relevance scores:
+-   `USE_EXTENDED_ACTIONS = "true"`: Enables weighted relevance (Click=1, Like=2, Share=3, Bookmark=3).
+-   Default is `false` (Click only).
+
 ```bash
+export USE_EXTENDED_ACTIONS=true
 python3 -m src.main
 ```
 
@@ -92,11 +98,6 @@ To calculate Click-Through Rate (CTR), Dwell Time, and perform statistical signi
 ```bash
 python3 src/evaluate.py
 ```
-
-### 5. Improvements
-We implemented an **Epsilon-Greedy** exploration strategy and **Matrix Factorization**.
--   **Exploration**: Randomly shuffling candidates with probability `epsilon` (default 0.1).
--   **Latent Features**: Capturing hidden preferences via SVD.
 
 ## Methodology & Results
 For a detailed report on the approach, architecture, and experimental results, please refer to [REPORT.md](REPORT.md).

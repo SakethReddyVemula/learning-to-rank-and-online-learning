@@ -1,6 +1,6 @@
 # Introduction
 
-This project details the design, implementation, and evaluation of a personalized news ranking system. The objective was to move beyond static retrieval methods by implementing a Learning to Rank (LTR) pipeline that adapts to user interactions (clicks) to improve relevance and engagement.
+The objective of the project was to move beyond static retrieval methods by implementing a Learning to Rank (LTR) pipeline that adapts to user interactions (clicks) to improve relevance and engagement.
 
 The system architecture integrates a User Simulation client, an Elasticsearch backend for candidate generation, and a flexible ranking engine capable of switching between various offline and online learning algorithms. We explored six distinct algorithmic approaches to optimize the ranking policy.
 
@@ -58,6 +58,15 @@ a_t = \text{argmax}_{a \in \mathcal{A}_t} \left( x_{t,a}^T \hat{\theta}_a + \alp
 $$
 
 Here, $x_{t,a}^T \hat{\theta}_a$ represents the **exploitation** (estimated reward), and $\alpha \sqrt{...}$ represents the **exploration** (uncertainty variance), where $A_a$ is the design matrix $D_a^T D_a + I_d$.
+
+#### 5.7 Extended User Actions
+We incorporated optional user signals ("Like", "Share", "Bookmark") to refine ranking:
+-   **Relevance Scoring**: Instead of binary (Click/No Click), we assign weights: Click=1, Like=2, Share=3, Bookmark=3.
+-   **Integration**:
+    -   **XGBoost**: Used as sample weights during training.
+    -   **MF/FM**: Used as explicit rating values in the interaction matrix.
+    -   **LinUCB**: Added to the reward signal for online updates.
+
 
 ### 6. Factorization Machines (Feature Interactions)
 We employed Factorization Machines (FM) to model interactions between variables (such as user ID, query features, and article attributes) even in sparse settings. Unlike linear models, FM models the pairwise interaction between all features $x_i$ and $x_j$ using factorized parameters:
