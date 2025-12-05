@@ -27,7 +27,6 @@ class PersonalizedRanker:
         if not candidate_ids:
             return []
 
-        # 1. Extract features for all candidates
         features_list = []
         valid_candidates = []
         
@@ -43,26 +42,18 @@ class PersonalizedRanker:
         if not valid_candidates:
             return []
 
-        # Epsilon-Greedy Exploration
         if random.random() < epsilon:
             self.logger.info(f"Exploration triggered for user {user_id}")
             random.shuffle(valid_candidates)
             return valid_candidates
 
-        # 2. Predict scores
         if self.model:
-            # Convert to DMatrix for XGBoost
             df = pd.DataFrame(features_list)
-            # Ensure column order matches training
-            # For now, we rely on pandas column order, but in prod we should enforce it
             dtest = xgb.DMatrix(df)
             scores = self.model.predict(dtest)
         else:
-            # Fallback: Sort by topic match score if no model
             scores = [f["topic_match_score"] for f in features_list]
 
-        # 3. Sort candidates by score
-        # Zip candidates with scores, sort descending
         ranked_pairs = sorted(zip(valid_candidates, scores), key=lambda x: x[1], reverse=True)
         
         return [aid for aid, score in ranked_pairs]

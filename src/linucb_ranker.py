@@ -9,7 +9,6 @@ class LinUCBRanker:
         self.alpha = alpha
         self.model_path = model_path
         
-        # Topic mapping
         self.topics = [
             "education", "environment", "health", "labor", 
             "lifestyle and leisure", "religion and belief", 
@@ -18,10 +17,8 @@ class LinUCBRanker:
         self.topic_map = {t: i for i, t in enumerate(self.topics)}
         self.n_features = len(self.topics)
         
-        # User models: user_id -> {'A': np.array, 'b': np.array}
         self.user_models = {}
         
-        # Article cache for feature lookup
         self.article_cache = {}
 
         if model_path and os.path.exists(model_path):
@@ -45,8 +42,6 @@ class LinUCBRanker:
             if t in self.topic_map:
                 features[self.topic_map[t]] = 1.0
         
-        # Normalize? Usually good for LinUCB to have bounded features.
-        # If multiple topics, vector length > 1. Let's normalize to unit norm.
         norm = np.linalg.norm(features)
         if norm > 0:
             features = features / norm
@@ -78,10 +73,6 @@ class LinUCBRanker:
         for aid in candidate_ids:
             x = self.get_article_features(aid)
             
-            # UCB Score = mean + alpha * std_dev
-            # mean = x.T * theta
-            # var = x.T * A_inv * x
-            
             mean = np.dot(x, theta)
             var = np.dot(np.dot(x, A_inv), x)
             std_dev = np.sqrt(var)
@@ -91,7 +82,6 @@ class LinUCBRanker:
             scores.append(ucb_score)
             valid_candidates.append(aid)
             
-        # Sort descending
         ranked_pairs = sorted(zip(valid_candidates, scores), key=lambda x: x[1], reverse=True)
         return [aid for aid, score in ranked_pairs]
 
@@ -101,19 +91,15 @@ class LinUCBRanker:
         
         x = self.get_article_features(article_id)
         
-        # Update A += x * x.T
         self.user_models[user_id]['A'] += np.outer(x, x)
         
-        # Update b += reward * x
         self.user_models[user_id]['b'] += reward * x
         
-        # self.logger.debug(f"Updated model for user {user_id}, reward={reward}")
 
     def save_model(self, path=None):
         if path is None:
             path = self.model_path
         if path:
-            # Ensure directory exists
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'wb') as f:
                 pickle.dump(self.user_models, f)

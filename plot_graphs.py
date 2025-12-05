@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 
-# CTR and Dwell Time values
 data = {
     "xgboost": {
         "ctr": {"control": 0.094877, "treatment": 0.093023},
@@ -24,12 +23,10 @@ data = {
     },
 }
 
-# Generate 5 figures
 for method, vals in data.items():
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
-    # --- CTR subplot ---
-    groups = list(vals["ctr"].keys())  # ['control', 'treatment']
+    groups = list(vals["ctr"].keys())
     ctrs = list(vals["ctr"].values())
 
     axes[0].bar(groups, ctrs)
@@ -37,11 +34,9 @@ for method, vals in data.items():
     axes[0].set_ylabel("CTR")
     axes[0].set_ylim(0, max(ctrs) * 1.3)
 
-    # Value annotations
     for i, v in enumerate(ctrs):
         axes[0].text(i, v + 0.002, f"{v:.3f}", ha='center', fontsize=9)
 
-    # --- Dwell time subplot ---
     dwell_groups = list(vals["dwell"].keys())
     dwell_vals = list(vals["dwell"].values())
 
@@ -50,7 +45,6 @@ for method, vals in data.items():
     axes[1].set_ylabel("Dwell Time (s)")
     axes[1].set_ylim(0, max(dwell_vals) * 1.3)
 
-    # Value annotations
     for i, v in enumerate(dwell_vals):
         axes[1].text(i, v + 0.1, f"{v:.2f}", ha='center', fontsize=9)
 

@@ -10,7 +10,6 @@ def evaluate():
     with open(LOG_FILE, 'r') as f:
         for line in f:
             data = json.loads(line)
-            # Only consider logs with experiment_group
             if "experiment_group" in data:
                 logs.append(data)
             
@@ -20,7 +19,6 @@ def evaluate():
 
     df = pd.DataFrame(logs)
     
-    # Helper to check if query had a click
     def has_click(actions):
         for aa in actions:
             if "Click" in aa:
@@ -29,14 +27,12 @@ def evaluate():
 
     df['clicked'] = df['actions'].apply(has_click)
     
-    # Group by experiment group
     results = df.groupby('experiment_group')['clicked'].agg(['count', 'sum', 'mean'])
     results.columns = ['Total Queries', 'Queries with Click', 'CTR']
     
     print("=== A/B Test Results ===")
     print(results)
     
-    # Statistical Test (t-test on binary click outcome)
     control_clicks = df[df['experiment_group'] == 'control']['clicked']
     treatment_clicks = df[df['experiment_group'] == 'treatment']['clicked']
     
@@ -51,8 +47,7 @@ def evaluate():
         else:
             print("Result is NOT Statistically Significant (p >= 0.05)")
             
-    # Dwell Time Analysis (Optional)
-    # Extract dwell times
+
     dwell_times = []
     for _, row in df.iterrows():
         group = row['experiment_group']

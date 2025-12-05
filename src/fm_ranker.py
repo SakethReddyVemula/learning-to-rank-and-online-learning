@@ -27,7 +27,7 @@ class FMRanker:
             self.user_map = data['user_map']
             self.item_map = data['item_map']
             self.topic_map = data['topic_map']
-            self.item_features = data.get('item_features') # Load features
+            self.item_features = data.get('item_features')
             
             self.logger.info(f"Loaded FM model from {model_path}")
         except Exception as e:
@@ -42,48 +42,44 @@ class FMRanker:
 
     def _get_item_features(self, candidate_ids):
         """Constructs the item feature matrix for the given candidates."""
-        # LightFM expects a CSR matrix of shape (n_items, n_features)
-        # However, for prediction, we usually pass item_ids and let it look up if we trained with features.
-        # But here we might encounter new items or we just want to pass features for the specific candidates.
-        # Wait, LightFM's predict takes `item_features` argument which must match the training dimension.
-        # The training dimension is (n_total_items, n_total_features).
-        # If we trained with item features (identity + topics), we need to provide that.
+        n_candidates = len(candidate_ids)
+        n_train_items = len(self.item_map)
+        n_train_topics = len(self.topic_map)
+        n_total_features = n_train_items + n_train_topics
         
-        # Actually, standard LightFM usage with features:
-        # Train: fit(interactions, item_features=F) where F is (n_items, n_features)
-        # Predict: predict(user_id, item_ids, item_features=F)
-        # So we need the FULL feature matrix F available or at least the rows corresponding to item_ids?
-        # No, we need the full F if we pass it, or we need to construct it such that it aligns.
+        rows = []
+        cols = []
+        data = []
         
-        # Simpler approach:
-        # We save the `item_features` matrix during training and load it here?
-        # Or we reconstruct it? Reconstructing is safer if we have the mappings.
-        # But `predict` expects `item_features` to be of shape (n_items, n_features).
-        # If we pass `item_ids` as indices into this matrix, it works.
+        for i, aid in enumerate(candidate_ids):
+            if aid in self.item_map:
+                item_idx = self.item_map[aid]
+                rows.append(i)
+                cols.append(item_idx)
+                data.append(1.0)
+            
+            article = self.article_cache.get(aid)
+            if article:
+                topics = article.get("topics", [])
+                for topic in topics:
+                    if topic in self.topic_map:
+                        topic_idx = self.topic_map[topic]
+                        col_idx = n_train_items + topic_idx
+                        rows.append(i)
+                        cols.append(col_idx)
+                        data.append(1.0)
         
-        # So, we need:
-        # 1. The full item feature matrix used during training (or an updated one).
-        # 2. Map candidate_ids to their internal indices.
-        
-        # Let's assume we load the feature matrix or reconstruct it on the fly?
-        # Reconstructing on the fly for *all* items is expensive.
-        # Let's try to save the feature matrix in the model file for simplicity.
-        pass
+        return csr_matrix((data, (rows, cols)), shape=(n_candidates, n_total_features))
 
     def rank(self, user_id, query_text, candidate_ids, epsilon=None):
         """Ranks candidates using LightFM scores."""
         if not self.model:
             return candidate_ids
 
-        # Map User
         u_idx = self.user_map.get(user_id)
         if u_idx is None:
-            # New user: LightFM can handle this if we had user features, but we only have ID.
-            # Fallback to baseline or random?
-            # Or just return as is.
             return candidate_ids
 
-        # Map Items
         item_indices = []
         valid_candidates = []
         
@@ -92,25 +88,17 @@ class FMRanker:
                 item_indices.append(self.item_map[aid])
                 valid_candidates.append(aid)
             else:
-                # Unknown item. If we had pure content features we could handle it,
-                # but LightFM with ID+Features usually expects known ID for the ID part.
-                # We'll skip or append with low score.
                 pass
         
         if not item_indices:
             return candidate_ids
 
-        # Predict
-        # We need the item_features matrix if we trained with it.
-        # Let's assume we saved it in `self.item_features` (loaded from pickle).
         item_features = getattr(self, 'item_features', None)
         
         scores = self.model.predict(u_idx, np.array(item_indices), item_features=item_features)
         
-        # Sort
         ranked_pairs = sorted(zip(valid_candidates, scores), key=lambda x: x[1], reverse=True)
         
-        # Merge back any skipped candidates (at the end)
         ranked_ids = [aid for aid, score in ranked_pairs]
         for aid in candidate_ids:
             if aid not in ranked_ids:

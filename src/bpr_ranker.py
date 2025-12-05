@@ -17,7 +17,6 @@ class BPRRanker:
                 self.model_data = pickle.load(f)
             self.logger.info(f"Loaded BPR model from {model_path}")
             
-            # Unpack data
             self.user_map = self.model_data['user_map']
             self.item_map = self.model_data['item_map']
             self.user_factors = self.model_data['user_factors']
@@ -32,7 +31,6 @@ class BPRRanker:
         if not candidate_ids:
             return []
 
-        # Epsilon-Greedy Exploration
         if random.random() < epsilon:
             self.logger.info(f"Exploration triggered for user {user_id}")
             shuffled = list(candidate_ids)
@@ -45,7 +43,6 @@ class BPRRanker:
         scores = []
         valid_candidates = []
         
-        # Check if user is known
         if user_id not in self.user_map:
             return candidate_ids
             
@@ -58,11 +55,10 @@ class BPRRanker:
                 i_vec = self.item_factors[i_idx]
                 score = np.dot(u_vec, i_vec)
             else:
-                score = 0.0 # Neutral score for unknown items
+                score = 0.0
             
             scores.append(score)
             valid_candidates.append(aid)
 
-        # Sort by score descending
         ranked_pairs = sorted(zip(valid_candidates, scores), key=lambda x: x[1], reverse=True)
         return [aid for aid, score in ranked_pairs]
